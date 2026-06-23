@@ -1,50 +1,96 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import Optional
 from fastapi import HTTPException, status
+from passlib.context import CryptContext
+from supabase import create_client
+from dotenv import load_dotenv
+import os
 
-from app.models.user import User
-from app.schemas.auth_schema import UserRegister
-from app.core.security import hash_password, verify_password
+load_dotenv()
+
+# ── Supabase client ──
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
+
+# ── Password hashing ──
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
-    result = await db.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
 
 
-async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[User]:
-    result = await db.execute(select(User).where(User.id == user_id))
-    return result.scalar_one_or_none()
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
 
 
-async def create_user(db: AsyncSession, data: UserRegister) -> User:
+# ── User CRUD via Supabase ──
+
+async def get_user_by_email(email: str) -> dict | None:
+    try:
+        res = supabase.table("users")\
+            .select("*")\
+            .eq("email", email)\
+            .limit(1)\
+            .execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
+
+
+async def get_user_by_id(user_id: int) -> dict | None:
+    try:
+        res = supabase.table("users")\
+            .select("*")\
+            .eq("id", user_id)\
+            .limit(1)\
+            .execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
+
+
+async def create_user(data) -> dict:
     # Cek email sudah terdaftar
-    existing = await get_user_by_email(db, data.email)
+    existing = await get_user_by_email(data.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email sudah terdaftar",
         )
 
-    user = User(
-        full_name=data.full_name,
-        email=data.email,
-        hashed_password=hash_password(data.password),
-    )
-    db.add(user)
-    await db.flush()   # dapat id sebelum commit
-    await db.refresh(user)
-    return user
+    try:
+        res = supabase.table("users").insert({
+            "full_name":       data.full_name,
+            "email":           data.email,
+            "hashed_password": hash_password(data.password),
+            "is_active":       True,
+        }).execute()
+
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Gagal membuat akun")
+
+        return res.data[0]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error membuat akun: {str(e)}")
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
-    user = await get_user_by_email(db, email)
-    if not user or not verify_password(password, user.hashed_password):
+async def authenticate_user(email: str, password: str) -> dict:
+    user = await get_user_by_email(email)
+
+    if not user or not verify_password(password, user.get("hashed_password", "")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email atau password salah",
         )
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Akun tidak aktif")
+
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun tidak aktif",
+        )
+
     return user

@@ -1,154 +1,199 @@
-"""
-CBF (Content-Based Filtering) Service
-─────────────────────────────────────
-Alur:
-1. Load semua produk dari DB satu kali, simpan di memory cache
-2. Saat request masuk, buat query_vector dari skin_type + concerns
-3. Hitung cosine_similarity antara query_vector dan semua produk
-4. Return top-N per kategori
-"""
-
-import joblib
 import numpy as np
-from typing import List, Dict
+import json
+from typing import List, Dict, Any
 from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
-from app.core.config import settings
-from app.models.product import Product
+from app.db.database import supabase, supabase_admin
 from app.schemas.product_schema import ProductWithScore, CategoryRecommendations
 
 
-# ─── Cache produk di memori ───────────────────────────────────
-_product_cache: List[dict] = []
-_tfidf_matrix: np.ndarray | None = None
-_vectorizer = None
+# ─────────────────────────────
+# GLOBAL CACHE
+# ─────────────────────────────
+_product_cache: List[Dict[str, Any]] = []
+_product_matrix: np.ndarray | None = None
+
+_vocab: Dict[str, int] = {}
+_idf: np.ndarray | None = None
 
 
-def load_cbf_model():
-    global _vectorizer
-    try:
-        # Joblib bisa load .joblib langsung, tidak perlu ubah apapun
-        loaded = joblib.load(settings.CBF_MODEL_PATH)
+# ─────────────────────────────
+# LOAD CBF METADATA (TF-IDF)
+# ─────────────────────────────
+async def load_metadata():
+    global _vocab, _idf
 
-        # Cek apakah isinya dict (model + vectorizer sekaligus)
-        if isinstance(loaded, dict):
-            _vectorizer = loaded.get("vectorizer") or loaded.get("tfidf")
-            print(f"[CBF] Loaded dari dict: keys = {list(loaded.keys())}")
-        else:
-            # Langsung vectorizer
-            _vectorizer = loaded
-            
-        print(f"[CBF] Model loaded dari {settings.CBF_MODEL_PATH}")
-    except FileNotFoundError:
-        print(f"[CBF] WARNING: File tidak ditemukan, pakai fallback TF-IDF")
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        _vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+    res = supabase_admin.table("cbf_metadata").select("key, value").execute()
+    rows = res.data or []
 
-
-async def build_product_cache(db: AsyncSession):
-    """Ambil semua produk dari DB dan buat TF-IDF matrix."""
-    global _product_cache, _tfidf_matrix, _vectorizer
-
-    result = await db.execute(select(Product))
-    products = result.scalars().all()
-
-    if not products:
-        print("[CBF] WARNING: Tidak ada produk di database!")
+    if not rows:
+        print("[CBF] WARNING: cbf_metadata kosong di database")
         return
+
+    for item in rows:
+        if item.get("key") != "tfidf_vocab":
+            continue
+
+        raw = item.get("value")
+
+        try:
+            payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception as e:
+            print(f"[CBF] ERROR parsing metadata: {e}")
+            return
+
+        vocab_list = payload.get("vocabulary", [])
+        idf_list = payload.get("idf", [])
+
+        if not vocab_list or not idf_list:
+            print("[CBF] ERROR: vocabulary atau idf kosong")
+            return
+
+        _vocab = {token: idx for idx, token in enumerate(vocab_list)}
+        _idf = np.array(idf_list, dtype=float)
+
+        print(f"[CBF] metadata loaded: vocab={len(_vocab)}, idf={len(_idf)}")
+        return
+
+    print("[CBF] WARNING: tfidf_vocab tidak ditemukan")
+
+
+# ─────────────────────────────
+# LOAD PRODUCT CACHE
+# ─────────────────────────────
+async def build_product_cache():
+    global _product_cache, _product_matrix
+
+    res = supabase_admin.table("products") \
+        .select("id, product_name, brand, category, url, skin_types, tfidf_vector, is_active") \
+        .eq("is_active", True) \
+        .execute()
+
+    products = res.data or []
 
     _product_cache = [
         {
-            "id": p.id,
-            "name": p.name,
-            "brand": p.brand,
-            "category": p.category,
-            "description_clean": p.description_clean or "",
-            "how_to_use": p.how_to_use or "",
-            "suitable_for": p.suitable_for or "",
-            "image_url": p.image_url,
+            "id": p["id"],
+            "name": p.get("product_name", ""),
+            "brand": p.get("brand", ""),
+            "category": p.get("category", ""),
+            "url": p.get("url", ""),
+            "skin_types": p.get("skin_types") or [],
+            "vector": p.get("tfidf_vector"),
         }
         for p in products
+        if p.get("tfidf_vector") is not None
     ]
 
-    # Buat corpus: gabungan semua teks per produk
-    corpus = [
-        _build_product_text(p) for p in _product_cache
-    ]
+    if not _product_cache:
+        print("[CBF] ERROR: product cache kosong")
+        return
 
-    if _vectorizer is None:
-        load_cbf_model()
+    _product_matrix = np.array(
+        [p["vector"] for p in _product_cache],
+        dtype=float
+    )
 
-    # Fit atau transform tergantung apakah vectorizer sudah di-fit
-    try:
-        _tfidf_matrix = _vectorizer.transform(corpus)
-    except Exception:
-        # Vectorizer belum di-fit (fallback), fit sekarang
-        _tfidf_matrix = _vectorizer.fit_transform(corpus)
-
-    print(f"[CBF] Cache dibangun: {len(_product_cache)} produk, matrix shape: {_tfidf_matrix.shape}")
+    print(f"[CBF] products loaded: {len(_product_cache)}")
 
 
-def _build_product_text(p: dict) -> str:
-    """Gabungkan field produk menjadi satu string untuk TF-IDF."""
-    parts = [
-        p.get("suitable_for", ""),
-        p.get("description_clean", ""),
-        p.get("how_to_use", ""),
-        p.get("category", ""),
-    ]
-    return " ".join(filter(None, parts)).lower()
-
-
+# ─────────────────────────────
+# QUERY BUILDER
+# ─────────────────────────────
 def _build_query_text(skin_type: str, concerns: List[str]) -> str:
-    """Buat query string dari skin_type + concerns pengguna."""
     skin_map = {
-        "normal": "kulit normal",
-        "oily": "kulit berminyak minyak berlebih",
-        "dry": "kulit kering kelembapan",
-        "combination": "kulit kombinasi t-zone",
-        "sensitive": "kulit sensitif kemerahan iritasi",
+        "normal": "normal balanced skin",
+        "oily": "oily acne sebum oil",
+        "dry": "dry dehydrated moisture",
+        "combination": "combination mixed skin",
+        "sensitive": "sensitive irritation redness",
     }
-    skin_text = skin_map.get(skin_type.lower(), skin_type)
-    concerns_text = " ".join(concerns)
-    return f"{skin_text} {concerns_text}".lower().strip()
+
+    base = skin_map.get(skin_type.lower(), skin_type)
+    return f"{base} {' '.join(concerns or [])}".lower()
 
 
+# ─────────────────────────────
+# QUERY VECTOR BUILDER
+# ─────────────────────────────
+def _build_query_vector(text: str) -> np.ndarray:
+    if not _vocab or _idf is None:
+        raise RuntimeError("CBF metadata belum di-load")
+
+    vec = np.zeros(len(_vocab), dtype=float)
+
+    for token in text.split():
+        if token in _vocab:
+            vec[_vocab[token]] += 1.0
+
+    vec = vec * _idf
+
+    norm = np.linalg.norm(vec)
+    return vec / norm if norm > 0 else vec
+
+
+# ─────────────────────────────
+# HYBRID SCORING
+# ─────────────────────────────
+def _hybrid_score(base_score: float, product: dict, skin_type: str) -> float:
+    skin_match = 1.0 if skin_type.lower() in (product.get("skin_types") or []) else 0.3
+    return base_score * 0.6 + skin_match * 0.4
+
+
+# ─────────────────────────────
+# CATEGORY NORMALIZER
+# ─────────────────────────────
+def _normalize_category(cat: str) -> str:
+    if not cat:
+        return ""
+
+    cat = cat.lower().strip()
+
+    mapping = {
+        "face_wash": "facial_wash",
+        "facial_wash": "facial_wash",
+        "toner": "toner",
+        "moisturizer": "moisturizer",
+        "sunscreen": "sunscreen",
+    }
+
+    return mapping.get(cat, "")
+
+
+# ─────────────────────────────
+# MAIN RECOMMENDATION ENGINE
+# ─────────────────────────────
 async def get_recommendations(
     skin_type: str,
     concerns: List[str],
     top_n: int = 5,
-    db: AsyncSession = None,
-) -> CategoryRecommendations:
-    """
-    Return top-N rekomendasi per kategori produk.
-    """
-    global _product_cache, _tfidf_matrix, _vectorizer
+):
 
-    # Rebuild cache jika kosong
-    if not _product_cache or _tfidf_matrix is None:
-        if db is None:
-            raise ValueError("DB diperlukan untuk build cache pertama kali")
-        await build_product_cache(db)
+    global _product_cache, _product_matrix
 
+    # ensure cache ready
     if not _product_cache:
-        return CategoryRecommendations()
+        await build_product_cache()
 
-    # Buat query vector
+    if _idf is None or not _vocab:
+        await load_metadata()
+
+    if _product_matrix is None:
+        raise RuntimeError("Product matrix belum tersedia")
+
     query_text = _build_query_text(skin_type, concerns)
-    query_vec = _vectorizer.transform([query_text])
+    query_vec = _build_query_vector(query_text)
 
-    # Hitung cosine similarity
-    scores = cosine_similarity(query_vec, _tfidf_matrix).flatten()
+    scores = cosine_similarity([query_vec], _product_matrix).flatten()
 
-    # Pasangkan skor ke produk
     scored_products = [
-        {**_product_cache[i], "similarity_score": float(scores[i])}
+        {
+            **_product_cache[i],
+            "score": _hybrid_score(scores[i], _product_cache[i], skin_type)
+        }
         for i in range(len(_product_cache))
     ]
 
-    # Kategori valid
     categories = {
         "facial_wash": [],
         "toner": [],
@@ -157,42 +202,25 @@ async def get_recommendations(
     }
 
     for p in scored_products:
-        cat = _normalize_category(p["category"])
+        cat = _normalize_category(p.get("category", ""))
         if cat in categories:
             categories[cat].append(p)
 
-    # Sort tiap kategori dan ambil top-N
-    result = {}
-    for cat, products in categories.items():
-        top = sorted(products, key=lambda x: x["similarity_score"], reverse=True)[:top_n]
-        result[cat] = [ProductWithScore(**p) for p in top]
+    result = {
+        cat: [
+            ProductWithScore(**item)
+            for item in sorted(items, key=lambda x: x["score"], reverse=True)[:top_n]
+        ]
+        for cat, items in categories.items()
+    }
 
     return CategoryRecommendations(**result)
 
 
-def _normalize_category(raw: str) -> str:
-    """Normalisasi nama kategori dari DB ke key yang konsisten."""
-    raw = raw.lower().strip().replace(" ", "_").replace("-", "_")
-    mapping = {
-        "facial_wash": "facial_wash",
-        "face_wash": "facial_wash",
-        "sabun_muka": "facial_wash",
-        "toner": "toner",
-        "toning": "toner",
-        "moisturizer": "moisturizer",
-        "pelembap": "moisturizer",
-        "moisturiser": "moisturizer",
-        "sunscreen": "sunscreen",
-        "sun_screen": "sunscreen",
-        "spf": "sunscreen",
-        "sunblock": "sunscreen",
-    }
-    return mapping.get(raw, raw)
-
-
+# ─────────────────────────────
+# CACHE INVALIDATION
+# ─────────────────────────────
 def invalidate_cache():
-    """Paksa rebuild cache (panggil setelah produk di-update)."""
-    global _product_cache, _tfidf_matrix
+    global _product_cache, _product_matrix
     _product_cache = []
-    _tfidf_matrix = None
-    print("[CBF] Cache di-invalidate, akan rebuild saat request berikutnya")
+    _product_matrix = None

@@ -1,80 +1,58 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
-
-from app.db.database import get_db
+from fastapi import APIRouter, Depends
 from app.schemas.product_schema import RecommendationRequest, RecommendationResponse
 from app.services.cbf_service import get_recommendations
 from app.core.security import get_current_user
-from app.models.user import User
+from app.db.database import supabase_admin
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
 
-@router.post(
-    "/",
-    response_model=RecommendationResponse,
-    summary="Dapatkan rekomendasi produk berdasarkan jenis kulit (CBF)",
-)
+async def _handle(data: RecommendationRequest):
+    recs = await get_recommendations(
+        skin_type=data.skin_type,
+        concerns=data.concerns,
+        top_n=data.top_n,
+    )
+
+    total = sum([
+        len(recs.facial_wash),
+        len(recs.toner),
+        len(recs.moisturizer),
+        len(recs.sunscreen),
+    ])
+
+    return RecommendationResponse(
+        skin_type=data.skin_type,
+        concerns=data.concerns,
+        recommendations=recs,
+        total_products_analyzed=total,
+    )
+
+
+@router.post("/", response_model=RecommendationResponse)
 async def recommend(
     data: RecommendationRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
-    """
-    Endpoint utama rekomendasi CBF.
+    return await _handle(data)
 
-    - **skin_type**: hasil klasifikasi CNN (normal/oily/dry/combination/sensitive)
-    - **concerns**: keluhan kulit pengguna (jerawat, minyak berlebih, dll)
-    - **top_n**: jumlah produk per kategori (default 5)
-    """
-    recs = await get_recommendations(
-        skin_type=data.skin_type,
-        concerns=data.concerns,
-        top_n=data.top_n,
-        db=db,
+
+@router.post("/guest", response_model=RecommendationResponse)
+async def recommend_guest(data: RecommendationRequest):
+    return await _handle(data)
+
+    
+@router.get("/db-test")
+def db_test():
+    result = (
+        supabase_admin
+        .table("products")
+        .select("id")
+        .limit(1)
+        .execute()
     )
 
-    total = sum([
-        len(recs.facial_wash),
-        len(recs.toner),
-        len(recs.moisturizer),
-        len(recs.sunscreen),
-    ])
-
-    return RecommendationResponse(
-        skin_type=data.skin_type,
-        concerns=data.concerns,
-        recommendations=recs,
-        total_products_analyzed=total,
-    )
-
-
-@router.post(
-    "/guest",
-    response_model=RecommendationResponse,
-    summary="Rekomendasi tanpa login (untuk testing)",
-)
-async def recommend_guest(
-    data: RecommendationRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Sama seperti /recommendations/ tapi tanpa autentikasi. Untuk dev/testing."""
-    recs = await get_recommendations(
-        skin_type=data.skin_type,
-        concerns=data.concerns,
-        top_n=data.top_n,
-        db=db,
-    )
-    total = sum([
-        len(recs.facial_wash),
-        len(recs.toner),
-        len(recs.moisturizer),
-        len(recs.sunscreen),
-    ])
-    return RecommendationResponse(
-        skin_type=data.skin_type,
-        concerns=data.concerns,
-        recommendations=recs,
-        total_products_analyzed=total,
-    )
+    return {
+        "success": True,
+        "rows": len(result.data)
+    }

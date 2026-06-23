@@ -1,67 +1,82 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from typing import List, Optional
+from fastapi import HTTPException
+from supabase import create_client
+from dotenv import load_dotenv
+import os
 
-from app.models.history import HistoryScan
-from app.schemas.history_schema import HistoryScanCreate
+load_dotenv()
 
-
-async def create_history_scan(
-    db: AsyncSession,
-    user_id: int,
-    data: HistoryScanCreate,
-) -> HistoryScan:
-    scan = HistoryScan(
-        user_id=user_id,
-        skin_type=data.skin_type,
-        cnn_confidence=data.cnn_confidence,
-        concerns=data.concerns,
-        image_url=data.image_url,
-        recommendations_snapshot=data.recommendations_snapshot,
-    )
-    db.add(scan)
-    await db.flush()
-    await db.refresh(scan)
-    return scan
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
 
 
-async def get_user_history(
-    db: AsyncSession,
-    user_id: int,
-    limit: int = 20,
-    offset: int = 0,
-) -> List[HistoryScan]:
-    result = await db.execute(
-        select(HistoryScan)
-        .where(HistoryScan.user_id == user_id)
-        .order_by(desc(HistoryScan.created_at))
-        .limit(limit)
-        .offset(offset)
-    )
-    return result.scalars().all()
+async def create_history_scan(user_id: int, data: dict) -> dict:
+    try:
+        res = supabase.table("history_scans").insert({
+            "user_id":                  user_id,
+            "skin_type":                data.get("skin_type"),
+            "cnn_confidence":           data.get("cnn_confidence"),
+            "concerns":                 data.get("concerns", []),
+            "image_url":                data.get("image_url"),
+            "recommendations_snapshot": data.get("recommendations_snapshot", []),
+        }).execute()
+
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Gagal menyimpan riwayat")
+
+        return res.data[0]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error simpan riwayat: {str(e)}")
 
 
-async def get_history_by_id(
-    db: AsyncSession,
-    scan_id: int,
-    user_id: int,
-) -> Optional[HistoryScan]:
-    result = await db.execute(
-        select(HistoryScan).where(
-            HistoryScan.id == scan_id,
-            HistoryScan.user_id == user_id,
-        )
-    )
-    return result.scalar_one_or_none()
+async def get_user_history(user_id: int, limit: int = 20, offset: int = 0) -> list:
+    try:
+        res = supabase.table("history_scans")\
+            .select("*")\
+            .eq("user_id", user_id)\
+            .order("created_at", desc=True)\
+            .range(offset, offset + limit - 1)\
+            .execute()
+        return res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error ambil riwayat: {str(e)}")
 
 
-async def delete_history_scan(
-    db: AsyncSession,
-    scan_id: int,
-    user_id: int,
-) -> bool:
-    scan = await get_history_by_id(db, scan_id, user_id)
-    if not scan:
+async def get_history_by_id(scan_id: int, user_id: int) -> dict | None:
+    try:
+        res = supabase.table("history_scans")\
+            .select("*")\
+            .eq("id", scan_id)\
+            .eq("user_id", user_id)\
+            .limit(1)\
+            .execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
+
+
+async def delete_history_scan(scan_id: int, user_id: int) -> bool:
+    try:
+        res = supabase.table("history_scans")\
+            .delete()\
+            .eq("id", scan_id)\
+            .eq("user_id", user_id)\
+            .execute()
+        return bool(res.data)
+    except Exception:
         return False
-    await db.delete(scan)
-    return True
+
+
+async def delete_all_user_history(user_id: int) -> int:
+    try:
+        res = supabase.table("history_scans")\
+            .delete()\
+            .eq("user_id", user_id)\
+            .execute()
+        return len(res.data) if res.data else 0
+    except Exception:
+        return 0

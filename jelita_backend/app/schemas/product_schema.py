@@ -1,39 +1,41 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List
+import uuid
 
 
 class ProductBase(BaseModel):
-    id: int
+    id: uuid.UUID                        # ← UUID bukan int
     name: str
     brand: Optional[str] = None
-    category: str
+    category: Optional[str] = None
     description_clean: Optional[str] = None
-    how_to_use: Optional[str] = None
     suitable_for: Optional[str] = None
     image_url: Optional[str] = None
+    skin_types: Optional[List[str]] = []
+    concerns: Optional[List[str]] = []
 
     model_config = {"from_attributes": True}
 
 
 class ProductWithScore(ProductBase):
-    similarity_score: float
+    similarity_score: float = 0.0
 
 
 class RecommendationRequest(BaseModel):
-    skin_type: str                      # normal | oily | dry | combination | sensitive
-    concerns: List[str] = []            # ["jerawat", "minyak berlebih", ...]
-    top_n: int = 5                      # jumlah rekomendasi per kategori
+    skin_type: str
+    concerns:  List[str] = []
+    top_n:     int = 5
 
 
 class CategoryRecommendations(BaseModel):
-    facial_wash: List[ProductWithScore] = []
-    toner: List[ProductWithScore] = []
-    moisturizer: List[ProductWithScore] = []
-    sunscreen: List[ProductWithScore] = []
+    facial_wash:  List[ProductWithScore] = []
+    toner:        List[ProductWithScore] = []
+    moisturizer:  List[ProductWithScore] = []
+    sunscreen:    List[ProductWithScore] = []
 
 
 class RecommendationResponse(BaseModel):
-    skin_type: str
-    concerns: List[str]
-    recommendations: CategoryRecommendations
-    total_products_analyzed: int
+    skin_type:                str
+    concerns:                 List[str]
+    recommendations:          CategoryRecommendations
+    total_products_analyzed:  int
