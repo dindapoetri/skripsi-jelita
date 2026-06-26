@@ -1,15 +1,4 @@
--- ============================================================
---  JELITA - Setup Database PostgreSQL
---  Jalankan script ini di psql atau pgAdmin
--- ============================================================
-
--- 1. Buat database (jalankan sebagai superuser di luar database jelita)
--- CREATE DATABASE jelita;
-
--- 2. Sambungkan ke database jelita, lalu jalankan sisanya
--- \c jelita
-
--- ─── Tabel users ─────────────────────────────────────────────
+# SUDAH TIDAK TERPAKAI LAGI, KARENA SEKARANG PAKAI SUPABASE
 CREATE TABLE IF NOT EXISTS users (
     id          SERIAL PRIMARY KEY,
     full_name   VARCHAR(100) NOT NULL,

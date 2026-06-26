@@ -6,17 +6,15 @@ import numpy as np
 from typing import Dict, Tuple
 import io
 import os
-
 from app.core.config import settings
 
-
-# ─── Label mapping sesuai SkinRepository.skinLabels di Flutter ───
+# Label mapping sesuai SkinRepository.skinLabels di Flutter
 SKIN_LABELS = {
     0: "oily",
     1: "dry",
     2: "normal",
     3: "combination",
-    4: "sensitive",
+    4: "acne",
 }
 
 SKIN_LABELS_ID = {
@@ -24,10 +22,10 @@ SKIN_LABELS_ID = {
     "dry": "Kulit Kering",
     "normal": "Kulit Normal",
     "combination": "Kulit Kombinasi",
-    "sensitive": "Kulit Sensitif",
+    "acne": "Kulit Berjerawat",
 }
 
-# ─── Transform: sama persis dengan preprocessing di Flutter ──────
+# Transform: sama persis dengan preprocessing di Flutter
 TRANSFORM = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -39,8 +37,7 @@ TRANSFORM = transforms.Compose([
 
 _model = None
 
-
-def load_cnn_model():
+def load_cnn_model():  # sourcery skip: remove-unreachable-code
     """Load model CNN dari file .ptl atau .pt"""
     global _model
 
@@ -49,7 +46,7 @@ def load_cnn_model():
     if not os.path.exists(model_path):
         print(f"[CNN] WARNING: Model tidak ditemukan di {model_path}")
         print("[CNN] Menggunakan MobileNetV3 default (tanpa bobot skripsi)...")
-        _model = _create_default_model()
+        raise RuntimeError("Model CNN tidak ditemukan atau gagal load.")
         return
 
     try:
@@ -79,16 +76,7 @@ def _create_default_model() -> nn.Module:
     model.eval()
     return model
 
-
 def predict_skin_type(image_bytes: bytes) -> Tuple[str, float, Dict[str, float]]:
-    """
-    Predict jenis kulit dari bytes gambar.
-
-    Returns:
-        skin_type: label hasil prediksi (oily/dry/normal/combination/sensitive)
-        confidence: nilai confidence 0.0–1.0
-        all_scores: dict semua label beserta skornya
-    """
     global _model
 
     if _model is None:

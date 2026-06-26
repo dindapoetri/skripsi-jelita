@@ -33,6 +33,7 @@ class Settings(BaseSettings):
 
     # ML Models
     CBF_MODEL_PATH: str = "jelita_backend\\assets\\models\\cbf\\cbf_model_22june.jotlib"
+    # JANGAN LUPA DIGANTI
     CNN_MODEL_PATH: str = str(BASE_DIR / "assets/models/cnn/mobilenetv3_skintype_90.ptl")
     
     # SMTP (Reset Password Email)

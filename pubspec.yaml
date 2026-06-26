@@ -1,0 +1,41 @@
+name: skripsi_jelita
+description: A starting point for Dart libraries or applications.
+version: 1.0.0
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  image_picker: ^1.2.2
+  shared_preferences: ^2.5.5
+  test: ^1.26.3
+  device_preview: ^1.1.0
+  pytorch_lite: ^4.3.2 
+  path_provider: ^2.1.4
+  supabase_flutter: ^2.12.4
+  http: ^1.2.0
+  intl: ^0.20.2
+  flutter_image_compress: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  lints: ^2.1.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/
+    - assets/models/cnn/
+    - assets/labels/
+    - assets/logo/
+    - assets/images/
+    - assets/models/cnn/mobilenetv3_skintype_90.ptl
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo/Jelita-black.png"

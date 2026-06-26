@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 import os
+from uuid import UUID
 
 load_dotenv()
 
@@ -35,31 +36,36 @@ def create_access_token(data: dict, expires_minutes: Optional[int] = None) -> st
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> dict:
-    """
-    Decode JWT token → return user dict dari Supabase.
-    Semua endpoint yang butuh login pakai Depends(get_current_user).
-    """
     try:
         payload = jwt.decode(
             credentials.credentials,
             SECRET_KEY,
             algorithms=[ALGORITHM],
         )
-        user_id: str = payload.get("sub")
+
+        user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token tidak valid",
             )
+
+        try:
+            user_uuid = UUID(user_id)
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Format user_id tidak valid",
+            )
+
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired atau tidak valid",
         )
 
-    # Import di sini untuk hindari circular import
     from app.services.user_service import get_user_by_id
-    user = await get_user_by_id(int(user_id))
+    user = await get_user_by_id(user_uuid)
 
     if not user:
         raise HTTPException(
@@ -67,4 +73,4 @@ async def get_current_user(
             detail="User tidak ditemukan",
         )
 
-    return user  # dict, bukan SQLAlchemy model
+    return user

@@ -1,8 +1,10 @@
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
+# from streamlit import user
 from supabase import create_client
 from dotenv import load_dotenv
 import os
+from uuid import UUID
 
 load_dotenv()
 
@@ -38,7 +40,7 @@ async def get_user_by_email(email: str) -> dict | None:
         return None
 
 
-async def get_user_by_id(user_id: int) -> dict | None:
+async def get_user_by_id(user_id: UUID) -> dict | None:
     try:
         res = supabase.table("users")\
             .select("*")\
@@ -51,7 +53,6 @@ async def get_user_by_id(user_id: int) -> dict | None:
 
 
 async def create_user(data) -> dict:
-    # Cek email sudah terdaftar
     existing = await get_user_by_email(data.email)
     if existing:
         raise HTTPException(
@@ -61,21 +62,30 @@ async def create_user(data) -> dict:
 
     try:
         res = supabase.table("users").insert({
-            "full_name":       data.full_name,
-            "email":           data.email,
+            "full_name": data.full_name,
+            "email": data.email,
             "hashed_password": hash_password(data.password),
-            "is_active":       True,
+            "is_active": True,
         }).execute()
 
         if not res.data:
             raise HTTPException(status_code=500, detail="Gagal membuat akun")
 
-        return res.data[0]
+        user = res.data[0]
 
-    except HTTPException:
-        raise
+        return {
+            "id": str(user["id"]),
+            "full_name": user["full_name"],
+            "email": user["email"],
+            "is_active": user.get("is_active", True),
+            "created_at": user.get("created_at")
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error membuat akun: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error membuat akun: {str(e)}"
+        )
 
 
 async def authenticate_user(email: str, password: str) -> dict:
@@ -94,3 +104,14 @@ async def authenticate_user(email: str, password: str) -> dict:
         )
 
     return user
+
+# CHANGE PASSWORD
+async def update_user_password(user_id, hashed_password):
+    response = (
+        supabase.table("users")
+        .update({"hashed_password": hashed_password})
+        .eq("id", str(user_id))
+        .execute()
+    )
+
+    return response.data

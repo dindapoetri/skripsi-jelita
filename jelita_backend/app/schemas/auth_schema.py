@@ -1,7 +1,7 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
-
+from uuid import UUID
 
 class UserRegister(BaseModel):
     full_name: str
@@ -22,27 +22,27 @@ class UserRegister(BaseModel):
             raise ValueError("Nama tidak boleh kosong")
         return v.strip()
 
-
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-
 class UserResponse(BaseModel):
-    id: int
+    id: UUID
     full_name: str
     email: str
     is_active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
+    
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=6)
+    new_password: str = Field(..., min_length=6)
+    
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
 
-
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
+    user_id: Optional[UUID] = None

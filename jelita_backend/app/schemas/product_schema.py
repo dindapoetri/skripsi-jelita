@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import Optional, List
 import uuid
 
-
 class ProductBase(BaseModel):
     id: uuid.UUID                        # ← UUID bukan int
     name: str

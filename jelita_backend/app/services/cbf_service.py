@@ -6,7 +6,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.db.database import supabase, supabase_admin
 from app.schemas.product_schema import ProductWithScore, CategoryRecommendations
 
-
 # ─────────────────────────────
 # GLOBAL CACHE
 # ─────────────────────────────
@@ -63,14 +62,31 @@ async def load_metadata():
 # ─────────────────────────────
 async def build_product_cache():
     global _product_cache, _product_matrix
-
-    res = supabase_admin.table("products") \
-        .select("id, product_name, brand, category, url, skin_types, tfidf_vector, is_active") \
-        .eq("is_active", True) \
-        .execute()
-
-    products = res.data or []
-
+ 
+    PAGE_SIZE = 1000
+    all_products: List[Dict[str, Any]] = []
+    offset = 0
+ 
+    while True:
+        res = supabase_admin.table("products") \
+            .select(
+                "id, product_name, brand, category, url, skin_types, "
+                "tfidf_vector, is_active, description, concerns"
+            ) \
+            .eq("is_active", True) \
+            .range(offset, offset + PAGE_SIZE - 1) \
+            .execute()
+ 
+        rows = res.data or []
+        all_products.extend(rows)
+ 
+        print(f"[CBF] fetched page offset={offset}, rows={len(rows)}, total_so_far={len(all_products)}")
+ 
+        if len(rows) < PAGE_SIZE:
+            break
+ 
+        offset += PAGE_SIZE
+ 
     _product_cache = [
         {
             "id": p["id"],
@@ -79,22 +95,25 @@ async def build_product_cache():
             "category": p.get("category", ""),
             "url": p.get("url", ""),
             "skin_types": p.get("skin_types") or [],
+            "description": p.get("description") or "",
+            "concerns": p.get("concerns") or [],
             "vector": p.get("tfidf_vector"),
         }
-        for p in products
+        for p in all_products
         if p.get("tfidf_vector") is not None
     ]
-
+ 
     if not _product_cache:
         print("[CBF] ERROR: product cache kosong")
         return
-
+ 
     _product_matrix = np.array(
         [p["vector"] for p in _product_cache],
         dtype=float
     )
-
-    print(f"[CBF] products loaded: {len(_product_cache)}")
+ 
+    print(f"[CBF] products loaded: {len(_product_cache)} (dari total {len(all_products)} baris ter-fetch)")
+ 
 
 
 # ─────────────────────────────
@@ -168,24 +187,23 @@ async def get_recommendations(
     concerns: List[str],
     top_n: int = 5,
 ):
-
+ 
     global _product_cache, _product_matrix
-
-    # ensure cache ready
+ 
     if not _product_cache:
         await build_product_cache()
-
+ 
     if _idf is None or not _vocab:
         await load_metadata()
-
+ 
     if _product_matrix is None:
         raise RuntimeError("Product matrix belum tersedia")
-
+ 
     query_text = _build_query_text(skin_type, concerns)
     query_vec = _build_query_vector(query_text)
-
+ 
     scores = cosine_similarity([query_vec], _product_matrix).flatten()
-
+ 
     scored_products = [
         {
             **_product_cache[i],
@@ -193,29 +211,62 @@ async def get_recommendations(
         }
         for i in range(len(_product_cache))
     ]
-
+ 
     categories = {
         "facial_wash": [],
         "toner": [],
         "moisturizer": [],
         "sunscreen": [],
     }
-
+ 
     for p in scored_products:
         cat = _normalize_category(p.get("category", ""))
         if cat in categories:
             categories[cat].append(p)
-
+ 
+    def _to_product_with_score(item: dict) -> dict:
+        # Mapping field cache -> field yang dikenal schema ProductWithScore.
+        # "vector" & raw "score"/"description" sengaja tidak ikut nama
+        # asli, supaya tidak nyangkut sbg extra field yang tidak dikenal.
+        return {
+            "id": item["id"],
+            "name": item.get("name", ""),
+            "brand": item.get("brand"),
+            "category": item.get("category"),
+            "description_clean": item.get("description") or None,
+            "suitable_for": item.get("suitable_for"),
+            "image_url": item.get("image_url"),
+            "skin_types": item.get("skin_types") or [],
+            "concerns": item.get("concerns") or [],
+            "similarity_score": item.get("score", 0.0),
+        }
+ 
     result = {
         cat: [
-            ProductWithScore(**item)
+            ProductWithScore(**_to_product_with_score(item))
             for item in sorted(items, key=lambda x: x["score"], reverse=True)[:top_n]
         ]
         for cat, items in categories.items()
     }
-
+ 
     return CategoryRecommendations(**result)
+ 
 
+def flatten_recommendations(result: CategoryRecommendations):
+    data = result.model_dump()
+
+    flat = []
+
+    for category, items in data.items():
+        for i, item in enumerate(items):
+            flat.append({
+                "product_id": item.id,
+                "score": item.similarity_score,
+                "rank": i + 1,
+                "category": category,
+            })
+
+    return flat
 
 # ─────────────────────────────
 # CACHE INVALIDATION
@@ -224,3 +275,24 @@ def invalidate_cache():
     global _product_cache, _product_matrix
     _product_cache = []
     _product_matrix = None
+    
+# DEBUG SEMENTARA
+def debug_category_distribution():
+    from collections import Counter
+ 
+    raw_categories = Counter(p.get("category") for p in _product_cache)
+    normalized_categories = Counter(
+        _normalize_category(p.get("category", "")) for p in _product_cache
+    )
+ 
+    print(f"[CBF DEBUG] total produk di cache: {len(_product_cache)}")
+    print(f"[CBF DEBUG] kategori MENTAH (raw, sebelum normalize): {dict(raw_categories)}")
+    print(f"[CBF DEBUG] kategori SETELAH normalize: {dict(normalized_categories)}")
+ 
+    # tampilkan beberapa contoh produk yang gagal dinormalisasi (cat == "")
+    gagal = [p.get("category") for p in _product_cache if _normalize_category(p.get("category", "")) == ""]
+    if gagal:
+        print(f"[CBF DEBUG] {len(gagal)} produk GAGAL dinormalisasi, contoh nilai mentahnya: {gagal[:10]}")
+    else:
+        print("[CBF DEBUG] semua produk berhasil dinormalisasi ke salah satu dari 4 kategori.")
+ 

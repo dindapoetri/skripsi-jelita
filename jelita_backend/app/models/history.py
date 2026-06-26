@@ -1,29 +1,105 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, JSON
-from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
-from app.db.database import Base
+from fastapi import APIRouter, HTTPException
+from uuid import UUID
+
+from app.services.history_service import (
+    create_history_scan,
+    get_user_history,
+    get_history_by_id,
+    delete_history_scan,
+    delete_all_user_history
+)
+
+router = APIRouter(prefix="/history", tags=["History"])
 
 
-class HistoryScan(Base):
-    __tablename__ = "history_scans"
+# =========================
+# CREATE HISTORY SCAN
+# =========================
+@router.post("")
+async def create_scan(user_id: UUID, data: dict):
+    try:
+        result = await create_history_scan(user_id, data)
+        return {
+            "message": "success",
+            "data": result
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # Hasil CNN
-    skin_type = Column(String(50), nullable=False)   # normal | oily | dry | combination | sensitive
-    cnn_confidence = Column(Float)                   # confidence score 0-1
+# =========================
+# GET USER HISTORY
+# =========================
+@router.get("/{user_id}")
+async def get_history(user_id: UUID, limit: int = 20, offset: int = 0):
+    try:
+        result = await get_user_history(user_id, limit, offset)
+        return {
+            "message": "success",
+            "data": result
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Keluhan user (dari input form)
-    concerns = Column(JSON)                          # ["jerawat", "minyak berlebih", ...]
 
-    # Foto
-    image_url = Column(String(500))                  # path relatif atau URL
+# =========================
+# GET HISTORY BY ID
+# =========================
+@router.get("/{user_id}/{scan_id}")
+async def get_history_detail(user_id: UUID, scan_id: int):
+    try:
+        result = await get_history_by_id(scan_id, user_id)
 
-    # Rekomendasi yang disimpan (snapshot)
-    recommendations_snapshot = Column(JSON)          # [{id, name, brand, category, score}, ...]
+        if not result:
+            raise HTTPException(status_code=404, detail="History tidak ditemukan")
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+        return {
+            "message": "success",
+            "data": result
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Relasi
-    user = relationship("User", back_populates="history_scans")
+
+# =========================
+# DELETE 1 HISTORY
+# =========================
+@router.delete("/{user_id}/{scan_id}")
+async def delete_history(user_id: UUID, scan_id: int):
+    try:
+        success = await delete_history_scan(scan_id, user_id)
+
+        if not success:
+            raise HTTPException(status_code=404, detail="Gagal menghapus / data tidak ada")
+
+        return {
+            "message": "deleted successfully"
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
+# DELETE ALL USER HISTORY
+# =========================
+@router.delete("/{user_id}")
+async def delete_all_history(user_id: UUID):
+    try:
+        deleted_count = await delete_all_user_history(user_id)
+
+        return {
+            "message": "success",
+            "deleted_count": deleted_count
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
