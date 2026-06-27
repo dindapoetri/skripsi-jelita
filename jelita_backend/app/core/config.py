@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # Database Postgresql #
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:dinda130714@localhost:5432/jelita"
+    DATABASE_URL: str = "postgresql://postgres:%40magicshop14@db.pdnmqrzpswlgouvzxtej.supabase.co:5432/postgres"
 
     # JWT
     SECRET_KEY: str = "68ed4a282d1792a6b5d1332f6cdc918bc1c9143c15bd3ad5e4345cd51a571b08"
