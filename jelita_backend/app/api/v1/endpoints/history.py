@@ -29,7 +29,6 @@ class SaveScanRequest(BaseModel):
     recommendations: List[str] = []
     ideal_ingredients: List[str] = []
     image_url: Optional[str] = None
-    storage_path: Optional[str] = None
     device_id: Optional[str] = None
     is_consented_for_training: bool = False
 
@@ -55,7 +54,7 @@ async def upload_scan_image(
 
         public_url = supabase_admin.storage.from_(BUCKET_NAME).get_public_url(file_path)
 
-        return {"image_url": public_url, "storage_path": file_path}
+        return {"image_url": public_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal upload gambar: {str(e)}")
 

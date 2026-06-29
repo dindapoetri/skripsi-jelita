@@ -14,7 +14,6 @@ async def create_history_scan(user_id: UUID, data: dict) -> dict:
             face_payload = {
                 "device_id": data.get("device_id"),
                 "image_url": image_url,
-                "storage_path": data.get("storage_path"),
                 "is_consented_for_training": data.get("is_consented_for_training", False),
             }
             print("📸 insert face_captures payload:", face_payload)
