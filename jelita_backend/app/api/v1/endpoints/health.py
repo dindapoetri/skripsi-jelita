@@ -1,6 +1,10 @@
 from fastapi import APIRouter
 from app.db.database import supabase_admin
-from app.services.cbf_service import _product_cache, _idf, _vocab
+from app.services.cbf_service import (
+    _product_cache,
+    _vectorizer,
+    _tfidf_matrix
+)
 
 router = APIRouter(prefix="/health", tags=["Health"])
 
@@ -45,34 +49,72 @@ def database_check():
 # ─────────────────────────────
 # CBF CHECK
 # ─────────────────────────────
+# @router.get("/cbf")
+# def cbf_check():
+#     return {
+#         "metadata_loaded": _idf is not None and _vocab is not None,
+#         "vocab_size": len(_vocab) if _vocab else 0,
+#         "idf_size": len(_idf) if _idf is not None else 0,
+#         "product_cache_size": len(_product_cache) if _product_cache else 0
+#     }
 @router.get("/cbf")
 def cbf_check():
     return {
-        "metadata_loaded": _idf is not None and _vocab is not None,
-        "vocab_size": len(_vocab) if _vocab else 0,
-        "idf_size": len(_idf) if _idf is not None else 0,
-        "product_cache_size": len(_product_cache) if _product_cache else 0
+        "vectorizer_loaded": _vectorizer is not None,
+        "tfidf_loaded": _tfidf_matrix is not None,
+        "tfidf_shape": (
+            list(_tfidf_matrix.shape)
+            if _tfidf_matrix is not None
+            else None
+        ),
+        "product_cache_size": len(_product_cache)
     }
 
 
 # ─────────────────────────────
 # FULL SYSTEM CHECK
 # ─────────────────────────────
+# @router.get("/system")
+# def system_check():
+#     db_ok = True
+#     cbf_ok = _idf is not None and _vocab is not None
+#     product_ok = len(_product_cache) > 0
+
+#     try:
+#         supabase_admin.table("products").select("id").limit(1).execute()
+#     except:
+#         db_ok = False
+
+#     return {
+#         "fastapi": "ok",
+#         "database": "ok" if db_ok else "failed",
+#         "cbf_metadata": "ok" if cbf_ok else "missing",
+#         "product_cache": len(_product_cache),
+#         "recommendation_ready": cbf_ok and product_ok,
+#         "classify_ready": True,
+#         "history_ready": True
+#     }
 @router.get("/system")
 def system_check():
+
     db_ok = True
-    cbf_ok = _idf is not None and _vocab is not None
+
+    cbf_ok = (
+        _vectorizer is not None
+        and _tfidf_matrix is not None
+    )
+
     product_ok = len(_product_cache) > 0
 
     try:
         supabase_admin.table("products").select("id").limit(1).execute()
-    except:
+    except Exception:
         db_ok = False
 
     return {
         "fastapi": "ok",
         "database": "ok" if db_ok else "failed",
-        "cbf_metadata": "ok" if cbf_ok else "missing",
+        "cbf_model": "ok" if cbf_ok else "missing",
         "product_cache": len(_product_cache),
         "recommendation_ready": cbf_ok and product_ok,
         "classify_ready": True,
@@ -95,7 +137,9 @@ def integration_test():
         db = supabase_admin.table("products").select("id").limit(1).execute()
 
         # CBF test
-        cbf_ready = _idf is not None and _vocab is not None
+        # cbf_ready = _idf is not None and _vocab is not None
+        cbf_ready = (_vectorizer is not None and _tfidf_matrix is not None
+)
 
         # product cache
         cache_ready = len(_product_cache) > 0

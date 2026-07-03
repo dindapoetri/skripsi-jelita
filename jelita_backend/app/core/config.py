@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     MAX_FILE_SIZE_MB: int = 5
 
     # ML Models
-    CBF_MODEL_PATH: str = "jelita_backend\\assets\\models\\cbf\\cbf_model_22june.jotlib"
+    # CBF_MODEL_PATH: str = "jelita_backend\\assets\\models\\cbf\\cbf_model_22june.jotlib"
     # JANGAN LUPA DIGANTI
     CNN_MODEL_PATH: str = str(BASE_DIR / "assets/models/cnn/mobilenetv3_skintype_90.ptl")
     

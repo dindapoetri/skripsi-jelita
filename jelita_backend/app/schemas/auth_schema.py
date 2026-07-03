@@ -5,6 +5,7 @@ from uuid import UUID
 
 class UserRegister(BaseModel):
     full_name: str
+    username: str
     email: EmailStr
     password: str
 
@@ -22,6 +23,18 @@ class UserRegister(BaseModel):
             raise ValueError("Nama tidak boleh kosong")
         return v.strip()
 
+    @field_validator("username")
+    @classmethod
+    def username_valid(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Username tidak boleh kosong")
+        if len(v) < 3:
+            raise ValueError("Username minimal 3 karakter")
+        if " " in v:
+            raise ValueError("Username tidak boleh mengandung spasi")
+        return v.lower()
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
@@ -29,6 +42,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     full_name: str
+    username: Optional[str] = None
     email: str
     is_active: bool
     created_at: datetime

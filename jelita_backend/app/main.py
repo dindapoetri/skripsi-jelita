@@ -6,7 +6,10 @@ import traceback
 
 from app.core.config import settings
 from app.api.v1.router import api_router
-from app.services.cbf_service import build_product_cache, load_metadata, debug_category_distribution
+from app.services.cbf_service import (
+    load_cbf_model,
+    load_products,
+)
 from app.services.cnn_service import load_cnn_model
 
 
@@ -20,13 +23,10 @@ async def lifespan(app: FastAPI):
     load_cnn_model()
 
     print("[CBF] Loading metadata (vocab + idf)...")
-    await load_metadata()
+    load_cbf_model()
 
     print("[CBF] Building product cache dari Supabase...")
-    await build_product_cache()
-    
-    # SEMENTARA
-    debug_category_distribution()
+    await load_products()
     
     print("[APP] Server siap 🚀")
 

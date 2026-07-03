@@ -1,6 +1,5 @@
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
-# from streamlit import user
 from supabase import create_client
 from dotenv import load_dotenv
 import os
@@ -52,6 +51,18 @@ async def get_user_by_id(user_id: UUID) -> dict | None:
         return None
 
 
+async def get_user_by_username(username: str) -> dict | None:
+    try:
+        res = supabase.table("users")\
+            .select("*")\
+            .eq("username", username)\
+            .limit(1)\
+            .execute()
+        return res.data[0] if res.data else None
+    except Exception:
+        return None
+
+
 async def create_user(data) -> dict:
     existing = await get_user_by_email(data.email)
     if existing:
@@ -60,9 +71,17 @@ async def create_user(data) -> dict:
             detail="Email sudah terdaftar",
         )
 
+    existing_username = await get_user_by_username(data.username)
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username sudah dipakai",
+        )
+
     try:
         res = supabase.table("users").insert({
             "full_name": data.full_name,
+            "username": data.username,
             "email": data.email,
             "hashed_password": hash_password(data.password),
             "is_active": True,
@@ -76,6 +95,7 @@ async def create_user(data) -> dict:
         return {
             "id": str(user["id"]),
             "full_name": user["full_name"],
+            "username": user.get("username"),
             "email": user["email"],
             "is_active": user.get("is_active", True),
             "created_at": user.get("created_at")
