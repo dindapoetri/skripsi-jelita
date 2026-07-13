@@ -13,8 +13,7 @@ class HistoryService {
     return prefs.getString('access_token');
   }
 
-  /// Upload file gambar lokal ke FastAPI → Supabase Storage.
-  /// Mengembalikan image_url publik, atau null kalau gagal/tidak ada file.
+  /// Upload file gambar lokal ke FastAPI ke Supabase Storage.
   Future<String?> uploadImage(String localPath) async {
     if (localPath.isEmpty) return null;
 
@@ -90,11 +89,6 @@ class HistoryService {
     }
   }
 
-  /// PENTING: sekarang benar-benar memanggil uploadImage() dulu, baru
-  /// pakai URL hasilnya saat POST /history/. Sebelumnya uploadImage()
-  /// ditulis tapi TIDAK PERNAH dipanggil dari sini, sehingga image_url
-  /// yang terkirim ke backend selalu path lokal mentah (bukan URL),
-  /// dan gambar gagal tampil di halaman Riwayat.
   Future<void> saveResult(SkinResultModel result) async {
     final token = await _token;
     if (token == null) {
@@ -110,8 +104,6 @@ class HistoryService {
 
     print('📨 image_url final untuk disimpan = $uploadedImageUrl');
 
-    // 2. Baru simpan riwayat, sisipkan URL hasil upload (bisa null kalau
-    //    upload gagal/dilewati -- tetap lanjut simpan riwayat teks).
     final response = await http.post(
       Uri.parse('$apiBaseUrl/history/'),
       headers: {
@@ -127,7 +119,7 @@ class HistoryService {
         'probabilities':     result.probabilities,
         'recommendations':   result.recommendations,
         'ideal_ingredients': result.idealIngredients,
-        'image_url':         uploadedImageUrl, // URL Storage asli, bukan path lokal lagi
+        'image_url':         uploadedImageUrl,
       }),
     );
 
