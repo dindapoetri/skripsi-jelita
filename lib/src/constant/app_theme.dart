@@ -1,8 +1,6 @@
-// lib/core/theme/app_theme.dart
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // ── Warna utama ──
   static const primary = Color(0xFF6886F3);
   static const gradient = Color(0xFFFA3D66);
   static const primarySoft = Color(0xFFDFF5EF);
@@ -16,7 +14,6 @@ class AppTheme {
   static const warning = Color(0xFFDB7C00);
   static const danger = Color(0xFFCF3C3C);
 
-  // ── Warna akurasi (Sementara menggunakan primary) ──
   static Color confidenceColor(double confidence) {
     if (confidence >= 0.75) return primary;
     if (confidence >= 0.50) return Colors.orange;
