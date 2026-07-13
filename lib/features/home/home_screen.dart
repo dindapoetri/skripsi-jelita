@@ -35,13 +35,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // login sebelum fitur username ditambahkan), ambil dari backend sekali
     try {
       final response = await _apiService.get('/auth/me');
       final username = response?['username'] as String?;
       final fullName = response?['full_name'] as String?;
 
-      // Prioritas: username -> full_name -> default 'Pengguna'
       final displayName = (username != null && username.isNotEmpty)
           ? username
           : (fullName != null && fullName.isNotEmpty)
@@ -49,8 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
           : null;
 
       if (displayName != null) {
-        // Hanya cache ke 'user_name' kalau memang username asli,
-        // supaya nanti kalau user isi username, tetap ke-refresh.
         if (username != null && username.isNotEmpty) {
           await prefs.setString('user_name', username);
         }
@@ -58,7 +54,6 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _userName = displayName);
       }
     } catch (e) {
-      // Gagal fetch (mis. offline / token expired) -> biarkan default 'Pengguna'
       debugPrint('Gagal memuat profil user: $e');
     }
   }
