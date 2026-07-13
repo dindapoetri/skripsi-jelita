@@ -1,6 +1,5 @@
 import 'package:intl/intl.dart';
 
-/// Mengubah huruf pertama setiap kata menjadi kapital
 String capitalizeWords(String text) {
   if (text.isEmpty) return text;
   return text.split(' ').map((word) {
@@ -9,7 +8,6 @@ String capitalizeWords(String text) {
   }).join(' ');
 }
 
-/// Memformat objek DateTime menjadi string yang mudah dibaca
 String formatDateTime(DateTime dateTime) {
   return DateFormat('dd/MM/yyyy • HH:mm').format(dateTime);
 }
