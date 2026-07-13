@@ -3,8 +3,7 @@ import 'product_model.dart';
 class RecommendationModel {
   final ProductModel product;
   final double score;
-  final List<String> matchedConcerns; // catatan: berisi KANDUNGAN/INGREDIENTS yang relevan,
-  // bukan keluhan kulit — lihat penjelasan di rationale builder.
+  final List<String> matchedConcerns;
   final List<String> matchedIngredients;
   final String rationale;
 
@@ -22,9 +21,6 @@ class RecommendationModel {
       }) {
     final product = ProductModel.fromMap(map);
 
-    // Kolom "concerns" di backend sebenarnya berisi kandungan/ingredients aktif
-    // (data source: kolom `concerns` Supabase yang ternyata diisi nama bahan,
-    // bukan keluhan kulit). Kita pakai apa adanya sebagai "kandungan relevan".
     final List<String> relevantIngredients = product.concerns;
 
     final rationale = _buildRationale(
