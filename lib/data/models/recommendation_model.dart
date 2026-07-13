@@ -16,22 +16,6 @@ class RecommendationModel {
     required this.rationale,
   });
 
-  /// Factory untuk parsing satu item dari response FastAPI
-  /// POST /api/v1/recommendations/ (lihat RecommendationResponse.recommendations.<category>[i])
-  ///
-  /// Bentuk JSON per item:
-  /// {
-  ///   "id": "...",
-  ///   "name": "...",
-  ///   "brand": "...",
-  ///   "category": "...",
-  ///   "description_clean": null,
-  ///   "suitable_for": null,
-  ///   "image_url": null,
-  ///   "skin_types": ["dry", "normal"],
-  ///   "concerns": ["niacinamide", "centella"],  // <- isinya KANDUNGAN, bukan concern kulit
-  ///   "similarity_score": 0
-  /// }
   factory RecommendationModel.fromCbfMap(
       Map<String, dynamic> map, {
         String skinType = '',

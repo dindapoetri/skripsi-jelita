@@ -5,6 +5,7 @@ import '../../src/services/camera_service.dart';
 import '../../src/constant/app_theme.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/custom_button.dart';
+import '../../src/services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final CameraService _cameraService = CameraService();
+  final ApiService _apiService = const ApiService();
   bool _isProcessing = false;
   String _userName = 'Pengguna';
 
@@ -26,9 +28,39 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _userName = prefs.getString('user_name') ?? 'Pengguna';
-    });
+    final cachedName = prefs.getString('user_name');
+
+    if (cachedName != null && cachedName.isNotEmpty) {
+      setState(() => _userName = cachedName);
+      return;
+    }
+
+    // login sebelum fitur username ditambahkan), ambil dari backend sekali
+    try {
+      final response = await _apiService.get('/auth/me');
+      final username = response?['username'] as String?;
+      final fullName = response?['full_name'] as String?;
+
+      // Prioritas: username -> full_name -> default 'Pengguna'
+      final displayName = (username != null && username.isNotEmpty)
+          ? username
+          : (fullName != null && fullName.isNotEmpty)
+          ? fullName
+          : null;
+
+      if (displayName != null) {
+        // Hanya cache ke 'user_name' kalau memang username asli,
+        // supaya nanti kalau user isi username, tetap ke-refresh.
+        if (username != null && username.isNotEmpty) {
+          await prefs.setString('user_name', username);
+        }
+        if (!mounted) return;
+        setState(() => _userName = displayName);
+      }
+    } catch (e) {
+      // Gagal fetch (mis. offline / token expired) -> biarkan default 'Pengguna'
+      debugPrint('Gagal memuat profil user: $e');
+    }
   }
 
   Future<void> _processImage(Future<String?> Function() picker) async {
@@ -122,9 +154,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 18),
               _buildStepCard(context, '01', 'Ambil foto wajah',
-                  'Gunakan kamera depan agar wajah lebih mudah dibaca.'),
+                  'Gunakan cahaya natural untuk hasil optimal dan kamera depan agar wajah lebih mudah dibaca.'),
               _buildStepCard(context, '02', 'Pilih kondisi',
-                  'Pilih gejala atau kondisi kulit yang sedang Anda alami.'),
+                  'Pilih gejala atau kondisi kulit yang sedang Anda alami untuk mendapat rekomendasi.'),
               _buildStepCard(context, '03', 'Rekomendasi',
                   'Lihat hasil klasifikasi kulitmu dan produk yang disarankan.'),
               const SizedBox(height: 24),

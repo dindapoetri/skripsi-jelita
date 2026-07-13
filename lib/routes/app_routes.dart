@@ -4,7 +4,7 @@ import '../features/history/history_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/recommendation/recommendation_screen.dart';
 import '../features/result/result_screen.dart';
-import '../features/splash/splash_screen.dart';
+// import '../features/splash/splash_screen.dart';
 import '../features/symptoms/skin_symptoms_screen.dart';
 import '../features/authentication/login_screen.dart';
 import '../features/authentication/signup_screen.dart';
@@ -13,7 +13,7 @@ import '../features/profile/profile_screen.dart';
 import '../features/profile/account_security_screen.dart';
 
 class AppRoutes {
-  static const splash = '/';
+  // static const splash = '/';
   static const home = '/home';
   static const login = '/login';
   static const signup = '/signup';
@@ -28,8 +28,8 @@ class AppRoutes {
 
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
-      case splash:
-        return MaterialPageRoute(builder: (_) => const SplashScreen());
+      // case splash:
+      //   return MaterialPageRoute(builder: (_) => const SplashScreen());
       case home:
         return MaterialPageRoute(builder: (_) => const HomeScreen());
       case login:

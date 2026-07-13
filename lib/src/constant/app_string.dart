@@ -12,6 +12,4 @@ class AppStrings {
   static const recommendation = 'Rekomendasi Skincare';
   static const loading = 'Memproses foto dan menganalisis kulit...';
   static const noHistory = 'Belum ada hasil analisis yang tersimpan.';
-  // static const analysisFlow =
-  //     '1. Ambil foto wajah  2. Model mengklasifikasi jenis kulit  3. CBF memilih produk yang paling cocok.';
 }

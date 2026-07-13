@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import '../../src/services/supabase_service.dart';
-import '../../src/services/api_service.dart';
 import '../../src/constant/app_theme.dart';
 import '../../widgets/custom_button.dart';
 
@@ -17,9 +16,9 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _supabaseService = SupabaseService();
-  final _api = const ApiService();
   bool _isLoading = false;
   bool _emailSent = false;
+  String _resultMessage = '';
 
   @override
   void dispose() {
@@ -32,9 +31,12 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await _supabaseService.forgotPassword(_emailController.text.trim());
+      final message = await _supabaseService.forgotPassword(_emailController.text.trim());
       if (!mounted) return;
-      setState(() => _emailSent = true);
+      setState(() {
+        _resultMessage = message;
+        _emailSent = true;
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -43,13 +45,6 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<void> resetPassword(String token, String newPassword) async {
-    await _api.post('/auth/reset-password', {
-      'token': token,
-      'new_password': newPassword,
-    });
   }
 
   @override
@@ -120,10 +115,10 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.mark_email_read_outlined, size: 80, color: Colors.green),
+        const Icon(Icons.info_outline, size: 80, color: AppTheme.primary),
         const SizedBox(height: 24),
         Text(
-          'Email Terkirim!',
+          'Permintaan Terkirim',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
@@ -131,7 +126,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Cek inbox ${_emailController.text} dan klik link reset password.',
+          _resultMessage,
           textAlign: TextAlign.center,
           style: const TextStyle(color: AppTheme.textSecondary),
         ),

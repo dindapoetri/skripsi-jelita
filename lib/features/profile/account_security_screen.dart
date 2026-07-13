@@ -13,12 +13,14 @@ class AccountSecurityScreen extends StatefulWidget {
 class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   final _supabaseService = SupabaseService();
   final _formKey = GlobalKey<FormState>();
+  final _currentPasswordController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoadingPassword = false;
 
   @override
   void dispose() {
+    _currentPasswordController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -30,23 +32,27 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
     setState(() => _isLoadingPassword = true);
     try {
       // TRANSAKSI: Flutter -> FastAPI -> Supabase
-      await _supabaseService.updatePassword(_passwordController.text.trim());
+      await _supabaseService.changePassword(
+        _currentPasswordController.text.trim(),
+        _passwordController.text.trim(),
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password berhasil diperbarui melalui transaksi aman!'), 
-          backgroundColor: AppTheme.success
+            content: Text('Password berhasil diperbarui melalui transaksi aman!'),
+            backgroundColor: AppTheme.success
         ),
       );
+      _currentPasswordController.clear();
       _passwordController.clear();
       _confirmPasswordController.clear();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal: $e'), 
-          backgroundColor: AppTheme.danger
+            content: Text('Gagal: $e'),
+            backgroundColor: AppTheme.danger
         ),
       );
     } finally {
@@ -74,6 +80,18 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               key: _formKey,
               child: Column(
                 children: [
+                  TextFormField(
+                    controller: _currentPasswordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Password Lama',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock_person_outlined),
+                    ),
+                    obscureText: true,
+                    validator: (value) =>
+                    value == null || value.isEmpty ? 'Password lama wajib diisi' : null,
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _passwordController,
                     decoration: const InputDecoration(

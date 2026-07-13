@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../src/constant/app_string.dart';
 import '../../src/constant/app_theme.dart';
@@ -26,30 +27,61 @@ class ResultScreen extends StatefulWidget {
 
 class _ResultScreenState extends State<ResultScreen> {
   final HistoryService _historyService = HistoryService();
+
   bool _saved = false;
+  bool _saving = false;
+  String? _saveError;
 
   @override
   void initState() {
     super.initState();
-    if (!widget.isFromHistory) {
-      _autoSave();
-    } else {
-      _saved = true;
-    }
+
+    debugPrint("📍 RESULT SCREEN OPENED");
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final prefs = await SharedPreferences.getInstance();
+      debugPrint("🔐 TOKEN (INIT RESULT SCREEN): ${prefs.getString('access_token')}");
+
+      if (!widget.isFromHistory) {
+        _autoSave();
+      } else {
+        setState(() => _saved = true);
+      }
+    });
   }
 
   Future<void> _autoSave() async {
-    if (_saved) return;
+    debugPrint("🚀 AUTO SAVE STARTED");
+
+    final prefs = await SharedPreferences.getInstance();
+    debugPrint("🔐 TOKEN (BEFORE SAVE): ${prefs.getString('access_token')}");
+
+    if (_saved || _saving) return;
+
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
 
     try {
-      // ✅ BARU: upload gambar lokal dulu, dapatkan image_url dari Supabase Storage
       String finalImagePath = widget.result.imagePath;
-      final uploadedUrl = await _historyService.uploadImage(widget.result.imagePath);
-      if (uploadedUrl != null) {
+
+      debugPrint("📦 IMAGE PATH: ${widget.result.imagePath}");
+      debugPrint("📦 SYMPTOMS: ${widget.symptoms}");
+      debugPrint("📤 UPLOAD IMAGE START");
+
+      if (widget.result.imagePath.isEmpty) {
+        throw Exception("Image path kosong");
+      }
+
+      final uploadedUrl =
+      await _historyService.uploadImage(widget.result.imagePath);
+
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
         finalImagePath = uploadedUrl;
-        debugPrint('✅ Gambar berhasil diupload: $uploadedUrl');
+        debugPrint("✅ UPLOAD SUCCESS: $uploadedUrl");
       } else {
-        debugPrint('⚠️ Upload gambar gagal/dilewati, lanjut simpan tanpa image_url baru');
+        debugPrint("⚠️ UPLOAD FAILED, USING LOCAL PATH");
       }
 
       final finalResult = SkinResultModel(
@@ -60,21 +92,46 @@ class _ResultScreenState extends State<ResultScreen> {
         concerns: widget.result.concerns,
         recommendations: widget.result.recommendations,
         probabilities: widget.result.probabilities,
-        imagePath: finalImagePath, // ✅ pakai URL hasil upload (atau path lokal kalau upload gagal)
+        imagePath: finalImagePath,
         createdAt: widget.result.createdAt,
         symptoms: widget.symptoms,
       );
 
       await _historyService.saveResult(finalResult);
-      if (mounted) setState(() => _saved = true);
-      debugPrint('✅ Transaksi riwayat berhasil melalui FastAPI');
+
+      if (!mounted) return;
+
+      setState(() {
+        _saved = true;
+      });
+
+      final prefsAfter = await SharedPreferences.getInstance();
+      debugPrint("🔐 TOKEN (AFTER SAVE): ${prefsAfter.getString('access_token')}");
+      debugPrint("✅ HISTORY SAVE SUCCESS");
     } catch (e) {
-      debugPrint('❌ Gagal transaksi riwayat: $e');
+      debugPrint("❌ AUTO SAVE ERROR: $e");
+
+      final prefs = await SharedPreferences.getInstance();
+      debugPrint("🔐 TOKEN (ON ERROR): ${prefs.getString('access_token')}");
+
+      if (!mounted) return;
+
+      setState(() {
+        _saveError = e.toString();
+      });
+    } finally {
+      if (!mounted) return;
+
+      setState(() {
+        _saving = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint("📊 BUILD RESULT SCREEN");
+
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -87,7 +144,25 @@ class _ResultScreenState extends State<ResultScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             SkinResultCard(result: widget.result),
+
+            const SizedBox(height: 12),
+
+            if (_saving) const LinearProgressIndicator(),
+
+            if (_saved)
+              const Text(
+                "✔ Hasil tersimpan",
+                style: TextStyle(color: Colors.green),
+              ),
+
+            if (_saveError != null)
+              Text(
+                "⚠ Gagal menyimpan: $_saveError",
+                style: const TextStyle(color: Colors.red),
+              ),
+
             const SizedBox(height: 16),
+
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -100,25 +175,25 @@ class _ResultScreenState extends State<ResultScreen> {
                 children: [
                   Text(
                     "Kondisi Kulit Pilihanmu:",
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 6,
                     runSpacing: 6,
-                    children: widget.symptoms.map((s) => Chip(
-                      label: Text(s, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500)),
-                      backgroundColor: AppTheme.background,
-                      side: const BorderSide(color: AppTheme.border),
-                      padding: EdgeInsets.zero,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                    )).toList(),
+                    children: widget.symptoms
+                        .map(
+                          (s) => Chip(label: Text(s)),
+                    )
+                        .toList(),
                   ),
                 ],
               ),
             ),
+
             const SizedBox(height: 20),
+
             CustomButton(
               label: AppStrings.recommendation,
               icon: Icons.shopping_bag_rounded,
@@ -132,7 +207,9 @@ class _ResultScreenState extends State<ResultScreen> {
                 );
               },
             ),
+
             const SizedBox(height: 12),
+
             CustomButton(
               label: 'Kembali ke Beranda',
               outlined: true,

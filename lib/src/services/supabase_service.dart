@@ -20,33 +20,70 @@ class SupabaseService {
     if (response != null && response['access_token'] != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('access_token', response['access_token']);
+      await _saveUserInfo(response['user']);
     }
   }
 
-  Future<void> signUp(String email, String password, String name) async {
+  Future<void> signUp(String email, String password, String name, {
+    required String username,
+  }) async {
     final response = await _api.post('/auth/register', {
       'email': email,
       'password': password,
       'full_name': name,
+      'username': username,
     });
     // Auto-login setelah register jika backend langsung return token
     if (response != null && response['access_token'] != null) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('access_token', response['access_token']);
+      await _saveUserInfo(response['user']);
     }
   }
 
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
+    await prefs.remove('user_name');
+    await prefs.remove('user_full_name');
+    await prefs.remove('user_id');
+    await prefs.remove('user_email');
   }
 
-  Future<void> forgotPassword(String email) async {
-    await _api.post('/auth/forgot-password', {'email': email});
+  // Menyimpan data user (dari response login/register) ke SharedPreferences
+  Future<void> _saveUserInfo(dynamic user) async {
+    if (user == null || user is! Map) return;
+    final prefs = await SharedPreferences.getInstance();
+
+    if (user['id'] != null) {
+      await prefs.setString('user_id', user['id'].toString());
+    }
+    if (user['email'] != null) {
+      await prefs.setString('user_email', user['email'].toString());
+    }
+    if (user['full_name'] != null) {
+      await prefs.setString('user_full_name', user['full_name'].toString());
+    }
+    if (user['username'] != null) {
+      await prefs.setString('user_name', user['username'].toString());
+    }
   }
 
-  Future<void> updatePassword(String newPassword) async {
-    await _api.post('/auth/update-password', {'new_password': newPassword});
+  Future<String> forgotPassword(String email) async {
+    final response = await _api.post('/auth/forgot-password', {'email': email});
+    return (response is Map && response['message'] != null)
+        ? response['message'] as String
+        : 'Jika email kamu terdaftar, silakan hubungi admin untuk proses reset password.';
+  }
+
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final response = await _api.post('/auth/change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
+    if (response is Map && response['success'] == false) {
+      throw Exception(response['message'] ?? 'Gagal mengganti password');
+    }
   }
 
   // --- DATA (semua lewat FastAPI) ---

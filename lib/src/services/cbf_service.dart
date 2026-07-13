@@ -4,8 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/recommendation_model.dart';
 import '../constant/api_constant.dart';
 
-/// Exception khusus supaya UI (RecommendationScreen) bisa tampilkan pesan
-/// yang lebih jelas dibanding generic Exception.
 class RecommendationAuthException implements Exception {
   final String message;
   RecommendationAuthException(this.message);
@@ -16,9 +14,6 @@ class RecommendationAuthException implements Exception {
 class CbfService {
   final String apiBaseUrl = ApiConstant.baseUrl; // diasumsikan sudah termasuk /api/v1
 
-  /// Token diambil dari SharedPreferences — sumber yang SAMA dengan yang
-  /// dipakai SupabaseService.signIn() & ApiService. Ini access_token hasil
-  /// POST /auth/login FastAPI, BUKAN token dari Supabase Auth SDK.
   Future<String?> get _token async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('access_token');
@@ -31,8 +26,6 @@ class CbfService {
     'sunscreen',
   ];
 
-  /// Memanggil POST /recommendations/ (wajib login).
-  /// Mengembalikan Map per kategori, masing-masing top [topN] produk.
   Future<Map<String, List<RecommendationModel>>> recommendCategorized({
     required String skinType,
     required List<String> concerns,
@@ -40,12 +33,15 @@ class CbfService {
   }) async {
     final token = await _token;
     if (token == null) {
-      // Sengaja throw exception khusus (bukan return {} diam-diam) supaya
-      // UI tahu kalau penyebabnya user belum/sesi habis login, bukan "produk tidak ada".
       throw RecommendationAuthException(
         'Sesi login tidak ditemukan. Silakan login ulang untuk melihat rekomendasi.',
       );
     }
+
+    print("🔐 [CBF SERVICE] CHECK TOKEN BEFORE REQUEST");
+
+    final prefs = await SharedPreferences.getInstance();
+    print("TOKEN: ${prefs.getString('access_token')}");
 
     final response = await http.post(
       Uri.parse('$apiBaseUrl/recommendations/'),

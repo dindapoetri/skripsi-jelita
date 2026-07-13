@@ -16,14 +16,18 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _supabaseService = SupabaseService();
   bool _isLoading = false;
+
+  static final RegExp _usernameRegex = RegExp(r'^[a-zA-Z0-9_]{3,20}$');
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -37,8 +41,9 @@ class _SignupScreenState extends State<SignupScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
         _nameController.text.trim(),
+        username: _usernameController.text.trim(),
       );
-      
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -46,11 +51,11 @@ class _SignupScreenState extends State<SignupScreen> {
           backgroundColor: AppTheme.success,
         ),
       );
-      
+
       // Langsung masuk ke Home setelah daftar
       Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.home, 
-        (route) => false,
+        AppRoutes.home,
+            (route) => false,
       );
     } catch (e) {
       if (!mounted) return;
@@ -87,9 +92,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 Text(
                   'Buat Akun Baru',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.textPrimary,
-                      ),
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -101,6 +106,25 @@ class _SignupScreenState extends State<SignupScreen> {
                     border: OutlineInputBorder(),
                   ),
                   validator: (value) => value == null || value.isEmpty ? 'Nama tidak boleh kosong' : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    prefixIcon: Icon(Icons.alternate_email_rounded),
+                    border: OutlineInputBorder(),
+                    helperText: '3-20 karakter, huruf/angka/underscore',
+                  ),
+                  autocorrect: false,
+                  validator: (value) {
+                    final v = value?.trim() ?? '';
+                    if (v.isEmpty) return 'Username tidak boleh kosong';
+                    if (!_usernameRegex.hasMatch(v)) {
+                      return 'Username 3-20 karakter, hanya huruf/angka/underscore';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
