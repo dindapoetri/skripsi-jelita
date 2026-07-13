@@ -8,9 +8,6 @@ class ApiService {
   final String baseUrl = ApiConstant.baseUrl;
   const ApiService();
 
-  // =========================
-  // 1. SAFE TOKEN RETRIEVAL
-  // =========================
   Future<String?> get _token async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
@@ -20,13 +17,9 @@ class ApiService {
     return token;
   }
 
-  // =========================
-  // 2. SAFE HEADERS BUILDER
-  // =========================
   Future<Map<String, String>> get _headers async {
     final token = await _token;
 
-    // ❗ IMPORTANT: jangan kirim "Bearer null"
     if (token == null || token.isEmpty) {
       debugPrint("⚠️ TOKEN NULL → REQUEST WITHOUT AUTH HEADER");
 
@@ -41,9 +34,6 @@ class ApiService {
     };
   }
 
-  // =========================
-  // 3. GET REQUEST
-  // =========================
   Future<dynamic> get(String endpoint) async {
     final response = await http.get(
       Uri.parse('$baseUrl$endpoint'),
@@ -53,9 +43,6 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  // =========================
-  // 4. POST REQUEST
-  // =========================
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
     final response = await http.post(
       Uri.parse('$baseUrl$endpoint'),
@@ -66,9 +53,6 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  // =========================
-  // 5. MULTIPART UPLOAD SAFE
-  // =========================
   Future<dynamic> postMultipart(
       String endpoint,
       String filePath,
@@ -96,26 +80,23 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  // =========================
-  // 6. SAFE RESPONSE HANDLER
-  // =========================
   dynamic _handleResponse(http.Response response) {
     debugPrint("📡 STATUS: ${response.statusCode}");
     debugPrint("📡 BODY: ${response.body}");
 
-    // ❗ SUCCESS
+    // SUCCESS
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
       return jsonDecode(response.body);
     }
 
-    // ❗ HANDLE UNAUTHORIZED (TAPI JANGAN AUTO LOGOUT DI SINI)
+    // HANDLE UNAUTHORIZED (TAPI JANGAN AUTO LOGOUT DI SINI)
     if (response.statusCode == 401) {
       debugPrint("🚨 401 UNAUTHORIZED (NO AUTO LOGOUT TRIGGERED)");
       throw Exception("UNAUTHORIZED");
     }
 
-    // ❗ HANDLE ERROR SAFE PARSE
+    // HANDLE ERROR SAFE PARSE
     try {
       final error = jsonDecode(response.body);
       throw Exception(error['detail'] ?? 'Server Error');
