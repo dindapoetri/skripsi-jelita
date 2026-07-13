@@ -1,50 +1,17 @@
-// clahe_processor.dart
-//
-// Implementasi CLAHE (Contrast Limited Adaptive Histogram Equalization)
-// murni Dart, memakai package `image` (https://pub.dev/packages/image).
-//
-// Tujuan: menyamakan preprocessing pencahayaan antara notebook training
-// (yang pakai cv2.createCLAHE() pada channel L / LAB colorspace) dengan
-// pipeline inference di Flutter, supaya tidak terjadi train-inference
-// mismatch yang menyebabkan hasil prediksi tidak stabil antar-take.
-//
-// Pendekatan: karena konversi RGB<->LAB penuh cukup berat untuk dihitung
-// manual di Dart, dipakai pendekatan luminance-preserving color:
-// 1. Hitung luminance (grayscale) tiap pixel.
-// 2. Terapkan CLAHE (tile-based adaptive histogram equalization + clip)
-//    pada luminance.
-// 3. Terapkan rasio perubahan luminance (baru/lama) ke channel R, G, B
-//    asli agar warna kulit tidak berubah drastis, hanya kontras &
-//    pencahayaannya yang dinormalisasi -- efeknya sangat mirip dengan
-//    CLAHE pada channel L di LAB colorspace.
-//
-// Cara pakai (lihat juga integration_example.dart):
-//
-//   final clahe = ClaheProcessor(tileSize: 8, clipLimit: 2.0);
-//   final img.Image normalized = clahe.apply(croppedFaceImage);
-//   // lanjut ke resize 224x224 + normalize ImageNet + kirim ke pytorch_lite
-
 import 'dart:math';
 import 'package:image/image.dart' as img;
 
 class ClaheProcessor {
-  /// Ukuran tile (grid) untuk adaptive histogram equalization.
-  /// Default 8 -> setara dengan tileGridSize=(8,8) di cv2.createCLAHE().
   final int tileSize;
-
-  /// Batas clip histogram, mencegah over-amplifikasi noise di area gelap/terang.
-  /// Default 2.0 -> setara dengan clipLimit=2.0 di cv2.createCLAHE().
   final double clipLimit;
 
   ClaheProcessor({this.tileSize = 8, this.clipLimit = 2.0});
 
-  /// Menerapkan CLAHE pada [src] dan mengembalikan gambar baru yang sudah
-  /// dinormalisasi pencahayaannya. Tidak mengubah ukuran gambar.
   img.Image apply(img.Image src) {
     final width = src.width;
     final height = src.height;
 
-    // 1. Hitung peta luminance (grayscale) untuk seluruh gambar
+    // Hitung peta luminance (grayscale) untuk seluruh gambar
     final luminance = List<List<int>>.generate(
       height,
           (y) => List<int>.generate(width, (x) {
@@ -54,7 +21,7 @@ class ClaheProcessor {
       }),
     );
 
-    // 2. Bagi jadi tile, hitung histogram per tile, clip, lalu buat mapping (CDF)
+    // Bagi jadi tile, hitung histogram per tile, clip, lalu buat mapping (CDF)
     final tilesX = (width / tileSize).ceil();
     final tilesY = (height / tileSize).ceil();
     final mappings = List.generate(
@@ -76,7 +43,7 @@ class ClaheProcessor {
           }
         }
 
-        // --- Clip histogram & redistribusi kelebihan (inti dari "Contrast Limited") ---
+        // Clip histogram & redistribusi kelebihan (inti dari "Contrast Limited")
         final numPixels = (x1 - x0) * (y1 - y0);
         if (numPixels == 0) continue;
         final clip = (clipLimit * numPixels / 256).round().clamp(1, numPixels);
@@ -92,7 +59,7 @@ class ClaheProcessor {
           hist[i] += redistribute;
         }
 
-        // --- CDF -> mapping function (0-255) ---
+        // CDF -> mapping function (0-255) 
         int cdf = 0;
         final mapping = List<int>.filled(256, 0);
         for (int i = 0; i < 256; i++) {
@@ -103,8 +70,7 @@ class ClaheProcessor {
       }
     }
 
-    // 3. Interpolasi bilinear antar-tile per pixel (menghindari efek "kotak-kotak"),
-    //    lalu terapkan rasio perubahan luminance ke RGB asli
+    // Interpolasi bilinear antar-tile per pixel (menghindari efek "kotak-kotak"),
     final out = img.Image(width: width, height: height);
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
