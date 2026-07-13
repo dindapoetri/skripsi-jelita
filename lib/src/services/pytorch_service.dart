@@ -16,9 +16,7 @@ class PyTorchService {
 
   final SkinRepository _skinRepository = SkinRepository();
 
-  // =========================
-  // NEW: Face pipeline ONLY
-  // =========================
+  // Pipeline
   final FaceDetectionService _faceService = FaceDetectionService();
   final ImageCropService _cropService = ImageCropService();
   final ClaheProcessor _claheProcessor = ClaheProcessor(); // [BARU]
