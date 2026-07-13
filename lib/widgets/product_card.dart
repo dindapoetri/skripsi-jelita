@@ -60,9 +60,6 @@ class ProductCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    // FIX: score dari backend dalam skala 0.0-1.0 (misal 0.12),
-                    // harus dikali 100 dulu supaya jadi persen yang benar (12%),
-                    // bukan dibulatkan langsung jadi 0%.
                     '${(recommendation.score * 100).toStringAsFixed(0)}%',
                     style: const TextStyle(
                       color: AppTheme.primary,
