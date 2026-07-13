@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:device_preview/device_preview.dart';
+// import 'package:device_preview/device_preview.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'src/constant/app_theme.dart';
 import 'src/constant/app_string.dart';
@@ -14,12 +14,7 @@ void main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  runApp(
-    DevicePreview(
-      enabled: true, 
-      builder: (context) => const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -28,12 +23,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      locale: DevicePreview.locale(context),
-      builder: DevicePreview.appBuilder,
       debugShowCheckedModeBanner: false,
       title: AppStrings.appName,
       theme: AppTheme.theme,
-      initialRoute: AppRoutes.splash,
+      initialRoute: AppRoutes.login,
       onGenerateRoute: AppRoutes.onGenerateRoute,
     );
   }
