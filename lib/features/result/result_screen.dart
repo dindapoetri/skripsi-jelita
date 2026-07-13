@@ -36,11 +36,11 @@ class _ResultScreenState extends State<ResultScreen> {
   void initState() {
     super.initState();
 
-    debugPrint("📍 RESULT SCREEN OPENED");
+    debugPrint("RESULT SCREEN OPENED");
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final prefs = await SharedPreferences.getInstance();
-      debugPrint("🔐 TOKEN (INIT RESULT SCREEN): ${prefs.getString('access_token')}");
+      debugPrint("TOKEN (INIT RESULT SCREEN): ${prefs.getString('access_token')}");
 
       if (!widget.isFromHistory) {
         _autoSave();
@@ -51,10 +51,10 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Future<void> _autoSave() async {
-    debugPrint("🚀 AUTO SAVE STARTED");
+    debugPrint("AUTO SAVE STARTED");
 
     final prefs = await SharedPreferences.getInstance();
-    debugPrint("🔐 TOKEN (BEFORE SAVE): ${prefs.getString('access_token')}");
+    debugPrint("TOKEN (BEFORE SAVE): ${prefs.getString('access_token')}");
 
     if (_saved || _saving) return;
 
@@ -66,9 +66,9 @@ class _ResultScreenState extends State<ResultScreen> {
     try {
       String finalImagePath = widget.result.imagePath;
 
-      debugPrint("📦 IMAGE PATH: ${widget.result.imagePath}");
-      debugPrint("📦 SYMPTOMS: ${widget.symptoms}");
-      debugPrint("📤 UPLOAD IMAGE START");
+      debugPrint("IMAGE PATH: ${widget.result.imagePath}");
+      debugPrint("SYMPTOMS: ${widget.symptoms}");
+      debugPrint("UPLOAD IMAGE START");
 
       if (widget.result.imagePath.isEmpty) {
         throw Exception("Image path kosong");
@@ -79,9 +79,9 @@ class _ResultScreenState extends State<ResultScreen> {
 
       if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
         finalImagePath = uploadedUrl;
-        debugPrint("✅ UPLOAD SUCCESS: $uploadedUrl");
+        debugPrint("UPLOAD SUCCESS: $uploadedUrl");
       } else {
-        debugPrint("⚠️ UPLOAD FAILED, USING LOCAL PATH");
+        debugPrint("UPLOAD FAILED, USING LOCAL PATH");
       }
 
       final finalResult = SkinResultModel(
@@ -106,13 +106,13 @@ class _ResultScreenState extends State<ResultScreen> {
       });
 
       final prefsAfter = await SharedPreferences.getInstance();
-      debugPrint("🔐 TOKEN (AFTER SAVE): ${prefsAfter.getString('access_token')}");
-      debugPrint("✅ HISTORY SAVE SUCCESS");
+      debugPrint("TOKEN (AFTER SAVE): ${prefsAfter.getString('access_token')}");
+      debugPrint("HISTORY SAVE SUCCESS");
     } catch (e) {
-      debugPrint("❌ AUTO SAVE ERROR: $e");
+      debugPrint("AUTO SAVE ERROR: $e");
 
       final prefs = await SharedPreferences.getInstance();
-      debugPrint("🔐 TOKEN (ON ERROR): ${prefs.getString('access_token')}");
+      debugPrint("TOKEN (ON ERROR): ${prefs.getString('access_token')}");
 
       if (!mounted) return;
 
